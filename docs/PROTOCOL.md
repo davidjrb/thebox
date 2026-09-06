@@ -17,7 +17,7 @@ wiki/NN-topic.md               the wiki: numbered markdown pages, one topic each
 ```
 
 URLs: `/<seat>/<page>/` for pages, `/<seat>/` for the seat card.
-Top-level names `send inbox board search api static healthz` are reserved for the hub.
+Top-level names `send inbox board search wiki paste api static healthz` are reserved for the hub.
 
 ## A seat
 

@@ -27,12 +27,14 @@ footer{color:var(--muted);font-size:.9rem;margin-top:3rem}
 <p>The shape is: a herdr <strong>workspace</strong> is a work group, a <strong>tab</strong> is one agent, the agent's name is the tab's name. Everything else is scriptable through its socket:</p>
 <pre><code>herdr                              # attach; ctrl+b q detaches, everything keeps running
 herdr --remote &lt;host&gt;              # thin client from the laptop, no ssh dance
-herdr workspace list               # JSON: workspaces -&gt; tabs -&gt; agents, with status
+herdr workspace list               # JSON: workspaces, each with agent_status and tab_count
+herdr tab list --workspace &lt;id&gt;    # the tabs of one workspace
+herdr agent list                   # every live agent with its pane, tab and state (the hub joins the three)
 herdr agent prompt wiki &quot;...&quot;      # type a prompt into a named agent
 herdr agent wait / pane read       # block on it, or read what is on its screen
 herdr --skill                      # teaches an AI agent to drive herdr itself
 </code></pre>
-<p>A one-page <code>seat</code> script wraps this: <code>seat Chess</code> focuses that workspace, or creates it, starts the engine named in the beacon (Claude Code by default, resuming the last transcript; anything else if the beacon says so) and attaches. <code>seat rename old new</code> moves the home directory, inbox, transcripts, relabels the workspace, renames the record in git and restarts the agent resumed, in one command. A user systemd unit starts the herdr server at boot so the seats survive a reboot.</p>
+<p>A one-page <code>seat</code> script wraps this: <code>seat Chess</code> focuses that workspace, or creates it, starts the engine named in the beacon (Claude Code by default, resuming the last transcript; anything else if the beacon says so) and attaches. <code>seat rename old new</code> moves the home directory, inbox, transcripts, relabels the workspace, renames the record in git and restarts the agent resumed, in one command. Both scripts understand single-tab seats only so far; a multi-tab work group is still created and renamed by hand with <code>herdr workspace create</code>, <code>tab create</code> and <code>agent start</code>. A user systemd unit starts the herdr server at boot so the seats survive a reboot.</p>
 <p>Things that bit me, so you can skip them:</p>
 <ul>
 <li>herdr forgets an agent's <em>name</em> whenever the session in its pane changes (a <code>/clear</code>, a resume). Key everything on the workspace label, and re-register the name every time you focus the seat.</li>
