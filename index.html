@@ -17,56 +17,55 @@ footer{color:var(--muted);font-size:.9rem;margin-top:3rem}
 </style></head><body><main>
 <h1>The box: a home server run by a team of AI agents</h1>
 <p class="meta">6 September 2026</p>
-<p>This is a write-up of a setup I have been building for two weeks, and it is only the beginning. The one-line version: a small Debian VM at home runs a handful of AI coding agents as <strong>standing roles</strong>, a tiny web page lets me drive them from my phone, and a set of house rules fell out of doing it for real. Everything below is a work in progress. There is a lot more coming, most of it about work productivity.</p>
+<p>A small Debian VM at home runs a handful of AI coding agents as <strong>standing roles</strong>. A one-page web app drives them from my phone. A few house rules fell out of doing it for real. About two or three days of work spread over the last two weeks, and only the beginning: more is coming, most of it about work productivity.</p>
 <h2>Seats, not processes</h2>
-<p>The first thing I learned is that an agent session is not the unit that matters. Sessions crash, get resumed, get replaced by a cheaper model. What persists is the <strong>role</strong>: "the one who owns the web page", "the one who curates the wiki", "the chess coach". I call these seats.</p>
-<p>A seat is two files in a git repo: a <strong>charter</strong> (<code>SEAT.md</code>, what the role is for, its standing orders, where its files live) and a <strong>beacon</strong> (<code>seat.json</code>, one line of status that the occupant updates when its state changes). The home page is built from that repo. If it is in the repo, it is on the home page; pushing is publishing.</p>
-<p>A seat can be a whole work group: one workspace with several tabs, one agent per tab, each in its own directory. The infrastructure group has a coordinator, a web tab, a wiki tab and a publisher tab. The chess group has a coach and an architect. Each tab has a charter section, an agent name, and a job.</p>
-<h2>herdr, the part that makes it work</h2>
-<p>I ran all of this in tmux for the first week, with a pile of <code>send-keys</code> helpers to talk to sessions. Then I trialled <a href="https://herdr.dev">herdr</a>, a terminal multiplexer written in Rust that is <strong>agent-aware</strong>: it detects the coding agent running in a pane and reports whether it is idle, working, blocked on a question, or done. After a few days I moved everything over and retired tmux.</p>
-<p>The shape is: a herdr <strong>workspace</strong> is a work group, a <strong>tab</strong> is one agent, the agent's name is the tab's name. Everything else is scriptable through its socket:</p>
+<p>An agent session is not the unit that matters. Sessions crash, get resumed, get swapped for a cheaper model. What persists is the role: the one who owns the web page, the one who curates the wiki, the chess coach. I call these seats.</p>
+<p>A seat is two files in a git repo: a <strong>charter</strong> (<code>SEAT.md</code>: what the role is for, its standing orders, where its files live) and a <strong>beacon</strong> (<code>seat.json</code>: one line of status the occupant updates when its state changes). The home page is built from that repo. If it is in the repo, it is on the home page; push is publish.</p>
+<p>A seat can be a work group: one workspace, several tabs, one agent per tab in its own directory. The infrastructure group has a coordinator, a web tab, a wiki tab and a publisher. The chess group has a coach and an architect.</p>
+<h2>herdr</h2>
+<p>I started in tmux with a pile of <code>send-keys</code> helpers. Then I tried <a href="https://herdr.dev">herdr</a>, a terminal multiplexer in Rust that is <strong>agent-aware</strong>: it recognises the coding agent in a pane and reports idle, working, blocked on a question, or done. After a few days I moved everything over and retired tmux.</p>
+<p>A herdr <strong>workspace</strong> is a work group, a <strong>tab</strong> is one agent, and the agent is named after its tab. Everything is scriptable over its socket:</p>
 <pre><code>herdr                              # attach; ctrl+b q detaches, everything keeps running
 herdr --remote &lt;host&gt;              # thin client from the laptop, no ssh dance
 herdr workspace list               # JSON: workspaces, each with agent_status and tab_count
 herdr tab list --workspace &lt;id&gt;    # the tabs of one workspace
-herdr agent list                   # every live agent with its pane, tab and state (the hub joins the three)
+herdr agent list                   # every live agent with its pane, tab and state
 herdr agent prompt wiki &quot;...&quot;      # type a prompt into a named agent
-herdr agent wait / pane read       # block on it, or read what is on its screen
+herdr agent wait / pane read       # block on it, or read its screen
 herdr --skill                      # teaches an AI agent to drive herdr itself
 </code></pre>
-<p>A one-page <code>seat</code> script wraps this: <code>seat Chess</code> focuses that workspace, or creates it, starts the engine named in the beacon (Claude Code by default, resuming the last transcript; anything else if the beacon says so) and attaches. <code>seat rename old new</code> moves the home directory, inbox, transcripts, relabels the workspace, renames the record in git and restarts the agent resumed, in one command. Both scripts understand single-tab seats only so far; a multi-tab work group is still created and renamed by hand with <code>herdr workspace create</code>, <code>tab create</code> and <code>agent start</code>. A user systemd unit starts the herdr server at boot so the seats survive a reboot.</p>
-<p>Things that bit me, so you can skip them:</p>
+<p>A short <code>seat</code> script wraps this: <code>seat Chess</code> focuses that workspace or creates it, starts the engine named in the beacon (Claude Code by default, resuming the last transcript), and attaches. <code>seat rename old new</code> moves home, inbox and transcripts, relabels the workspace, renames the record in git and restarts the agent resumed. Both understand single-tab seats only so far; multi-tab groups are still wired by hand with <code>herdr workspace create</code>, <code>tab create</code> and <code>agent start</code>. A user systemd unit starts the herdr server at boot.</p>
+<p>Things that bit me:</p>
 <ul>
-<li>herdr forgets an agent's <em>name</em> whenever the session in its pane changes (a <code>/clear</code>, a resume). Key everything on the workspace label, and re-register the name every time you focus the seat.</li>
-<li>Keep the server and every remote client on the same herdr version. A mismatched remote attach can replace the server and take every pane with it.</li>
-<li>Do not nest herdr inside tmux or the other way round. Both want <code>ctrl+b</code>.</li>
-<li>Claude Code runs in the terminal's alternate screen and scrolls its own transcript, so the multiplexer keeps no history for it. Wheel events are the right primitive, which matters for the phone terminal below.</li>
+<li>herdr forgets an agent's <em>name</em> whenever the session in its pane changes (a <code>/clear</code>, a resume). Key everything on the workspace label and re-register the name on every focus.</li>
+<li>Keep server and remote clients on the same herdr version. A mismatched attach can replace the server and take every pane with it.</li>
+<li>Don't nest herdr and tmux. Both want <code>ctrl+b</code>.</li>
+<li>Claude Code runs in the alternate screen and scrolls its own transcript, so the multiplexer keeps no history for it. Wheel events are the right primitive, which matters for the phone terminal.</li>
 </ul>
-<h2>The hub: one small web page</h2>
-<p>Behind Caddy sits a Flask app of about a thousand lines. It does only what static files cannot:</p>
+<h2>The hub</h2>
+<p>Behind Caddy, a Flask app of about a thousand lines. It does only what static files cannot:</p>
 <ul>
-<li><strong>Home</strong>: one card per work group, one row per tab with a live dot from herdr (green idle, blue working, red blocked), the beacon line, and per-tab send / inbox / terminal links. A workspace that exists in herdr but has no seat record shows up red until it is filed or closed. No ghosts.</li>
-<li><strong>Send</strong>: a prompt plus attachments from any device lands as a markdown note in the group's inbox directory, and the agent gets a one-line nudge pointing at the file. <em>The file is the message; the nudge is only a doorbell.</em> If the nudge is lost, nothing is lost.</li>
-<li><strong>Inbox</strong>, <strong>board</strong> (a markdown file with <code>## [ ]</code> items and notes attached to the row, editable on the page or by hand, committed either way), <strong>search</strong> (ripgrep over the site and the inboxes), a <strong>wiki</strong> rendered from numbered markdown pages, and a <strong>paste bucket</strong> for moving text between devices.</li>
-<li><strong>Terminal in the browser</strong>, on the phone. ttyd attaches to one pane by URL; the hub wraps it with a viewport meta (without it the page is unreadably tiny), font zoom, and a key row: newline, arrows, page up/down, and Ctrl/Alt/Esc behind a "more" button. One-finger drags are turned into wheel events so an agent's transcript scrolls under your thumb. Do not CSS-transform the iframe and do not resize it when a key is pressed; Firefox on Android blanks the page if you do.</li>
-<li><strong>Deploy</strong>: a webhook from the local Gitea pulls the site repo on push. Push is publish.</li>
+<li><strong>Home</strong>: a card per work group, a row per tab with a live dot from herdr, the beacon line, and send / inbox / terminal links. A workspace with no seat record shows red until it is filed or closed.</li>
+<li><strong>Send</strong>: a prompt plus attachments from any device lands as a markdown note in the group's inbox, and the agent gets a one-line nudge pointing at it. The file is the message; the nudge is a doorbell.</li>
+<li><strong>Inbox</strong>, a markdown <strong>board</strong> (items with notes attached to the row, editable on the page or by hand, committed either way), <strong>search</strong>, a <strong>wiki</strong> from numbered markdown pages, a <strong>paste bucket</strong>.</li>
+<li><strong>Terminal on the phone</strong>: ttyd attaches to one pane by URL; the hub adds a viewport meta (without it the page is unreadably tiny), font zoom, a key row (newline, arrows, page up/down, Ctrl/Alt/Esc behind a "more" button), and one-finger drags turned into wheel events so the transcript scrolls under your thumb. Don't CSS-transform the iframe or resize it on a key press; Firefox on Android blanks the page.</li>
+<li><strong>Deploy</strong>: a webhook from the local Gitea pulls the site repo on push.</li>
 </ul>
-<p>Everything the hub writes is a file. Nothing has a database.</p>
+<p>Everything the hub writes is a file. There is no database.</p>
 <h2>The house rules</h2>
-<p>These were not designed. Each one exists because something went wrong without it.</p>
+<p>Each one exists because something went wrong without it.</p>
 <ol>
-<li><strong>One home per agent.</strong> Never point two agents at one directory. Four sessions once shared the home directory and "resume the last conversation" became a lottery.</li>
-<li><strong>Every agent runs without permission prompts.</strong> An agent left in ask mode is gated by a classifier that blocks infrastructure work at random. The coordinator could not launch a sibling tab because of it.</li>
-<li><strong>Separation of duties.</strong> The coordinator wires seats and routes work; it does not do a specialist's job. When something in a domain breaks, it goes to the seat that owns it, not to whoever noticed. <em>Route it, don't absorb it.</em></li>
-<li><strong>Pipelines wake their owner.</strong> A timer that a seat owns fails with <code>OnFailure=</code> pointing at a handler that files an inbox note <strong>and</strong> prompts that seat. A sync failed silently for five days before this rule existed.</li>
-<li><strong>Done means documented.</strong> Commit, push, update the beacon. Files are the truth, not what is on the screen.</li>
-<li><strong>Economy.</strong> The expensive model for judgement and synthesis; menial and bulk work goes to cheap models through <a href="https://github.com/can1357/oh-my-pi">omp</a> on Synthetic, at a hundredth of the price. Each seat's beacon says which engine sits in it, and <code>seat</code> starts the right one.</li>
-<li><strong>Credentials live in one file with mode 600</strong>, mapped by name, never in a repo. A page on the hub can collect a token straight into that directory so it never passes through a note or a commit.</li>
-<li><strong>Publishing has a gate.</strong> A publisher seat stages anything meant for GitHub as a fresh tree, scans it, rewrites the README for a stranger, writes release notes on what was removed, and pushes only on an explicit per-release OK. This post went through it.</li>
+<li><strong>One home per agent.</strong> Four sessions once shared a home directory and "resume the last conversation" became a lottery.</li>
+<li><strong>Every agent runs without permission prompts.</strong> In ask mode a classifier blocks infrastructure work at random; the coordinator could not launch a sibling tab.</li>
+<li><strong>Separation of duties.</strong> The coordinator wires seats and routes work; it does not do a specialist's job. Route it, don't absorb it.</li>
+<li><strong>Pipelines wake their owner.</strong> <code>OnFailure=</code> points at a handler that files an inbox note and prompts the owning seat. A sync failed silently for five days before this rule.</li>
+<li><strong>Done means documented.</strong> Commit, push, update the beacon. Files are the truth, not the screen.</li>
+<li><strong>Economy.</strong> The expensive model for judgement; bulk work goes to cheap models through <a href="https://github.com/can1357/oh-my-pi">omp</a> at a hundredth of the price. The beacon says which engine sits in each seat.</li>
+<li><strong>Credentials live in one file with mode 600</strong>, never in a repo. A hub page can collect a token straight into that directory.</li>
+<li><strong>Publishing has a gate.</strong> A publisher seat stages a fresh tree, scans it, rewrites the README for a stranger, notes what was removed, and pushes on an explicit OK. This repo went through it.</li>
 </ol>
-<h2>What it is doing today</h2>
-<p>The infrastructure group keeps the box coherent. The chess group pulled every online game I have played into a database, ran an engine over them, and produced <a href="https://davidjrb.github.io/chess/6sep2026/">a first coaching report</a>. A couple of personal groups handle paperwork and experiments I will not go into.</p>
-<p>The whole thing is one VM, a few hundred lines of Python and bash, a git repo of markdown, and herdr. That is the point. The agents do the work; the setup just makes sure there is always someone in the seat, that they can be reached from a phone, and that nothing that happens is lost.</p>
-<p>More soon.</p>
-<footer><hr>Source and the setup itself: <a href="https://github.com/davidjrb/thebox">github.com/davidjrb/thebox</a> · Also: <a href="https://davidjrb.github.io/chess/6sep2026/">the chess coaching report</a> the chess group produced · <a href="https://davidjrb.github.io/">blog</a></footer>
+<h2>Today</h2>
+<p>The infrastructure group keeps the box coherent. The chess group pulled every online game I have played into a database, ran an engine over them, and wrote <a href="https://davidjrb.github.io/chess/6sep2026/">a first coaching report</a>. A couple of personal groups I won't go into.</p>
+<p>One VM, a few hundred lines of Python and bash, a git repo of markdown, and herdr. The agents do the work; the setup makes sure someone is always in the seat, reachable from a phone, and that nothing that happens is lost.</p>
+<footer><hr>Source and the setup itself: <a href="https://github.com/davidjrb/thebox">github.com/davidjrb/thebox</a> · Also: <a href="https://davidjrb.github.io/chess/6sep2026/">the chess coaching report</a> · <a href="https://davidjrb.github.io/">blog</a></footer>
 </main></body></html>
