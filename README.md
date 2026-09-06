@@ -19,13 +19,15 @@ The shape is: a herdr **workspace** is a work group, a **tab** is one agent, the
 ```
 herdr                              # attach; ctrl+b q detaches, everything keeps running
 herdr --remote <host>              # thin client from the laptop, no ssh dance
-herdr workspace list               # JSON: workspaces -> tabs -> agents, with status
+herdr workspace list               # JSON: workspaces, each with agent_status and tab_count
+herdr tab list --workspace <id>    # the tabs of one workspace
+herdr agent list                   # every live agent with its pane, tab and state (the hub joins the three)
 herdr agent prompt wiki "..."      # type a prompt into a named agent
 herdr agent wait / pane read       # block on it, or read what is on its screen
 herdr --skill                      # teaches an AI agent to drive herdr itself
 ```
 
-A one-page `seat` script wraps this: `seat Chess` focuses that workspace, or creates it, starts the engine named in the beacon (Claude Code by default, resuming the last transcript; anything else if the beacon says so) and attaches. `seat rename old new` moves the home directory, inbox, transcripts, relabels the workspace, renames the record in git and restarts the agent resumed, in one command. A user systemd unit starts the herdr server at boot so the seats survive a reboot.
+A one-page `seat` script wraps this: `seat Chess` focuses that workspace, or creates it, starts the engine named in the beacon (Claude Code by default, resuming the last transcript; anything else if the beacon says so) and attaches. `seat rename old new` moves the home directory, inbox, transcripts, relabels the workspace, renames the record in git and restarts the agent resumed, in one command. Both scripts understand single-tab seats only so far; a multi-tab work group is still created and renamed by hand with `herdr workspace create`, `tab create` and `agent start`. A user systemd unit starts the herdr server at boot so the seats survive a reboot.
 
 Things that bit me, so you can skip them:
 
