@@ -18,7 +18,7 @@ messages to seats, render inboxes, edit the board, search, and pull on push.
 | `/api/response?session=` | last assistant message of an omp session (breadcrumb-based) |
 | `/api/send` | multipart: `session`, `prompt`, `mode` (prompt/ping), `files`, optional `tab` (which tab's agent gets the nudge; the note always lands in the group's inbox) |
 | `/api/board` | JSON `{action: add|note|toggle|retitle|delete, …}` |
-| `/api/secret` | POST `{name, value}` → `~/.config/hub/<name>` (0600); lets a page collect a token without it touching an inbox note or git. Value is never logged or echoed |
+| `/api/secret` | POST `{name, value}` → `~/.config/hub/<name>` (0600); lets a page collect a token without it touching an inbox note or git. Value is never logged or echoed. **Unauthenticated write**, like `/api/send`: it relies on Caddy's basic auth (`deploy/auth.caddy.example`) being enabled in front of the hub |
 | `/api/inbox/<seat>/<msg>/read` | POST; `undo=1` to mark unread |
 | `/api/deploy` | gitea webhook (HMAC-SHA256 `X-Gitea-Signature`, or `?token=`) → `git pull --ff-only` |
 

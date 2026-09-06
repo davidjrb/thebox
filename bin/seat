@@ -10,7 +10,7 @@
 # transcript exists. Extra Claude flags: SEAT_ARGS="--resume <id>" seat X   (first run after a move).
 set -e
 HERDR="${HERDR:-$HOME/.local/bin/herdr}"
-WWW="${SEAT_WWW:-$WWW}"
+WWW="${SEAT_WWW:-/srv/www}"
 seats() { ls $WWW 2>/dev/null | grep -v -E '^(README\.md|board\.md)$' | tr '\n' ' '; }
 name="${1:-}"
 if [[ "$name" == "rename" ]]; then
