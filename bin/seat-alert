@@ -1,0 +1,55 @@
+#!/bin/bash
+# seat-alert <group> <tab> <unit> [reason] — route a failed systemd unit to the seat that owns it.
+# Fired by systemd OnFailure (see systemd/example.onfailure.conf + seat-alert.service), runnable by hand.
+# Does NOT fix anything itself: it files an inbox note for the group and wakes the owning tab's herdr
+# agent so the specialist handles it. If no agent is live, the note waits and a desktop toast fires.
+set -u
+HERDR="${HERDR:-$HOME/.local/bin/herdr}"
+WWW="${SEAT_WWW:-/srv/www}"
+group="${1:?group}"; tab="${2:?tab}"; unit="${3:?unit}"; reason="${4:-$unit reported a failure}"
+ts="$(date +%Y%m%d-%H%M%S)"
+msgdir="$HOME/inbox/$group/${ts}_${tab}-alert"
+mkdir -p "$msgdir"
+state="$(systemctl is-failed "$unit" 2>/dev/null || true)"
+cat > "$msgdir/note.md" <<EOF
+# Alert: $unit
+
+- **from:** systemd OnFailure (seat-alert)
+- **when:** $(date '+%Y-%m-%d %H:%M:%S')
+- **unit:** $unit — state: ${state:-active/ok}
+- **reason:** $reason
+
+## Recent log
+\`\`\`
+$(journalctl -u "$unit" -n 30 --no-pager 2>/dev/null | tail -30)
+\`\`\`
+
+## What to do ($tab tab of $group owns this — see $WWW/$group/SEAT.md)
+Follow the runbook in the charter, then \`touch READ\` in this directory and update seat.json.
+EOF
+touch "$HOME/inbox/$group/INBOX.md"
+"$HERDR" notification show "⚠ $group/$tab: $reason" >/dev/null 2>&1 || true
+# Resolve <group>/<tab> by workspace LABEL + tab LABEL, then target the agent's PANE id — pane ids are
+# stable, whereas herdr clears an agent's *name* when its process is replaced (resume, relaunch).
+target="$(python3 - "$HERDR" "$group" "$tab" <<'PY'
+import json, subprocess, sys
+h, group, tab = sys.argv[1:4]
+def j(*a):
+    try: return json.loads(subprocess.run([h,*a],capture_output=True,text=True,timeout=8).stdout)
+    except Exception: return {}
+ws=j("workspace","list").get("result",{}).get("workspaces",[])
+wid=next((w["workspace_id"] for w in ws if w["label"]==group), None)
+tabs=j("tab","list","--workspace",wid).get("result",{}).get("tabs",[]) if wid else []
+tid=next((t["tab_id"] for t in tabs if (t.get("label") or "").lower()==tab.lower()), None)
+ag=j("agent","list").get("result",{}).get("agents",[])
+a=next((a for a in ag if a.get("tab_id")==tid), None) if tid else None
+print((a.get("name") or a.get("pane_id")) if a else "")
+PY
+)"
+if [ -n "$target" ]; then
+  "$HERDR" agent prompt "$target" "📥 Alert — read $msgdir/note.md and act on it per your charter." >/dev/null 2>&1 \
+    && echo "seat-alert: filed $msgdir and woke $group/$tab ($target)" \
+    || echo "seat-alert: filed $msgdir ($group/$tab agent $target busy/blocked — note is waiting)"
+else
+  echo "seat-alert: filed $msgdir (no live agent — start the $group/$tab tab)"
+fi

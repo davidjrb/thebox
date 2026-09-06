@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}board — hub{% endblock %}
+{% block body %}
+<h1>Board <span class="muted small">board.md in <a href="{{ www_repo_url }}/src/branch/main/board.md">the site repo</a> — every change is a commit</span></h1>
+<div class="md small muted">{{ preamble_html|safe }}</div>
+
+<form id="addform" class="addrow">
+  <input id="addtitle" placeholder="new item — #tags allowed in the title" autofocus>
+  <input id="addnote" placeholder="first note (optional)">
+  <button>Add</button>
+</form>
+<div class="filterrow">
+  <input id="filter" type="search" placeholder="filter rows (title, tags, notes)">
+  <label><input type="checkbox" id="showdone"> show done</label>
+  <span id="msg" class="small"></span>
+</div>
+
+<div id="items">
+{% for it in items %}
+<article class="item {{ 'done' if it.done else '' }}" id="item-{{ it.idx }}" data-idx="{{ it.idx }}" data-title="{{ it.title }}"
+         data-text="{{ (it.title ~ ' ' ~ it.tags|join(' ') ~ ' ' ~ it.notes|join(' '))|lower }}">
+  <div class="row">
+    <button class="check" data-act="toggle" title="{{ 'reopen' if it.done else 'mark done' }}">{{ '☑' if it.done else '☐' }}</button>
+    <span class="ititle">{{ it.title }}</span>
+    {% for t in it.tags %}<span class="tag">#{{ t }}</span>{% endfor %}
+    <span class="muted small">{{ it.date }}</span>
+    <span class="grow"></span>
+    <span class="muted small">{{ it.notes|length }} note{{ '' if it.notes|length == 1 else 's' }}</span>
+    <button class="ghost small" data-act="retitle" title="rename">✎</button>
+    <button class="ghost small" data-act="delete" title="delete">✕</button>
+  </div>
+  {% if it.body %}<div class="md small">{{ it.body|join('\n') }}</div>{% endif %}
+  <ul class="notes">
+    {% for n in it.notes %}<li>{{ n }}</li>{% endfor %}
+  </ul>
+  <form class="noterow" data-idx="{{ it.idx }}">
+    <input placeholder="+ note on “{{ it.title[:40] }}” — Enter to save" aria-label="add note">
+    <button class="ghost small">save</button>
+  </form>
+</article>
+{% else %}
+<p class="muted">nothing on the board yet</p>
+{% endfor %}
+</div>
+{% endblock %}
+{% block scripts %}<script>hubBoard();</script>{% endblock %}

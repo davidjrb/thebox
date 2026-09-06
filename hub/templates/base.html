@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}hub{% endblock %}</title>
+<link rel="stylesheet" href="/static/hub.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/">hub</a>
+  <nav>
+    <a href="/send" {% if request.path.startswith('/send') %}class="on"{% endif %}>Send</a>
+    <a href="/inbox/" {% if request.path.startswith('/inbox') %}class="on"{% endif %}>Inbox</a>
+    <a href="/board" {% if request.path.startswith('/board') %}class="on"{% endif %}>Board</a>
+    <a href="/paste" {% if request.path.startswith('/paste') %}class="on"{% endif %}>Paste</a>
+    <a href="/wiki" {% if request.path.startswith('/wiki') %}class="on"{% endif %}>Wiki</a>
+    <a href="{{ gitea_url }}" target="_blank" rel="noopener">Gitea ↗</a>
+  </nav>
+  <form class="search" action="/search" method="get">
+    <input type="search" name="q" placeholder="search pages, notes, board…" value="{{ request.args.get('q','') }}" aria-label="search">
+  </form>
+</header>
+<main>
+{% block body %}{% endblock %}
+</main>
+<footer class="foot">hub on {{ host }} · files: /srv/www (<a href="{{ www_repo_url }}">site repo</a>) · ~/inbox · <a href="/api/status">api/status</a></footer>
+<script src="/static/hub.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

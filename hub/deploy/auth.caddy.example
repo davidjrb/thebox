@@ -1,0 +1,4 @@
+# /etc/caddy/auth.caddy  (root:caddy 640) — generate the hash with: caddy hash-password
+basicauth @needauth {
+	USER $2a$14$REPLACE_WITH_HASH
+}

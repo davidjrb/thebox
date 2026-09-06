@@ -1,0 +1,92 @@
+#!/bin/bash
+# seat <name>  — focus a seat's herdr workspace, or create it, start its engine, and attach.
+#
+# Convention: seat X is a herdr workspace labelled X with cwd ~/X
+# (engines key resume/memory/transcripts on the cwd), agent name = lowercase X, record in
+# $SEAT_WWW/X/{SEAT.md,seat.json} (default $WWW), inbox ~/inbox/X/.
+#   attach locally / from phone ssh:  seat X   (or plain `herdr` for the full UI)
+#   attach from another machine:      herdr --remote <host>
+# Engine: seat.json "cmd" wins (omp seats etc.); default is Claude Code with --continue when a
+# transcript exists. Extra Claude flags: SEAT_ARGS="--resume <id>" seat X   (first run after a move).
+set -e
+HERDR="${HERDR:-$HOME/.local/bin/herdr}"
+WWW="${SEAT_WWW:-$WWW}"
+seats() { ls $WWW 2>/dev/null | grep -v -E '^(README\.md|board\.md)$' | tr '\n' ' '; }
+name="${1:-}"
+if [[ "$name" == "rename" ]]; then
+  [[ $# -eq 3 ]] || { echo "usage: seat rename <old> <new>"; exit 1; }
+  exec "$HOME/bin/seat-rename" "$2" "$3"   # one command: stops idle agent, moves home/inbox/transcripts, relabels herdr, git-mv + push, restarts resumed
+fi
+if [[ -z "$name" ]]; then
+  echo "usage: seat <name> | seat rename <old> <new>    seats: $(seats)"
+  "$HERDR" workspace list 2>/dev/null | python3 -c '
+import json,sys
+try: d=json.load(sys.stdin)
+except Exception: sys.exit(0)
+for w in d.get("result",{}).get("workspaces",[]):
+    print(f"  herdr: {w["label"]:<14} {w["agent_status"]}")'
+  exit 1
+fi
+[[ "$name" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "bad seat name"; exit 1; }
+dir="$HOME/$name"
+agent=$(echo "$name" | tr 'A-Z' 'a-z')
+
+ws=$("$HERDR" workspace list | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+for w in d['result']['workspaces']:
+    if w['label']=='$name': print(w['workspace_id']); break")
+
+if [[ -z "$ws" ]]; then
+  mkdir -p "$dir"
+  [[ -f "$WWW/$name/seat.json" ]] || echo "note: no seat record at $WWW/$name/ — create SEAT.md + seat.json so it shows on the hub"
+  created=$("$HERDR" workspace create --cwd "$dir" --label "$name" --no-focus)
+  ws=$(echo "$created"   | python3 -c "import json,sys;print(json.load(sys.stdin)['result']['workspace']['workspace_id'])")
+  pane=$(echo "$created" | python3 -c "import json,sys;print(json.load(sys.stdin)['result']['root_pane']['pane_id'])")
+else
+  pane=$("$HERDR" pane list --workspace "$ws" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print(d['result']['panes'][0]['pane_id'])" 2>/dev/null || true)
+fi
+
+# start the engine unless the workspace already hosts a live agent
+have=$("$HERDR" agent list | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print(next((a['pane_id']+' '+a.get('name','') for a in d['result']['agents'] if a['workspace_id']=='$ws'), ''))")
+if [[ -n "$have" ]]; then
+  # herdr drops the agent NAME whenever the session in the pane changes (/clear, resume, relaunch);
+  # the hub/alerts key on the workspace label so nothing breaks, but `herdr agent prompt <name>`
+  # would — re-register on every focus so the name is always right.
+  read -r apane aname <<< "$have"
+  [[ "$aname" == "$agent" ]] || "$HERDR" agent rename "$apane" "$agent" >/dev/null 2>&1 || true
+fi
+if [[ -z "$have" && -n "$pane" ]]; then
+  proj="$HOME/.claude/projects/$(echo "$dir" | sed 's#/#-#g')"
+  custom=$(python3 -c "import json;print(json.load(open('$WWW/$name/seat.json')).get('cmd',''))" 2>/dev/null || true)
+  if [[ -n "$custom" ]]; then
+    read -ra words <<< "$custom"                       # cmds are plain words (no shell quoting)
+    kind=$(basename "${words[0]}"); args=("${words[@]:1}")
+  else
+    kind=claude; args=(--dangerously-skip-permissions)
+    if [[ -n "${SEAT_ARGS:-}" ]]; then read -ra extra <<< "$SEAT_ARGS"; args+=("${extra[@]}")
+    elif ls "$proj"/*.jsonl >/dev/null 2>&1; then args+=(--continue); fi
+  fi
+  case "$kind" in
+    claude|omp|codex|gemini|pi)     # kinds herdr recognizes → managed agent with status
+      "$HERDR" agent start "$agent" --kind "$kind" --pane "$pane" -- "${args[@]}" >/dev/null \
+        || echo "note: agent started but not ready (blocked?) — check the pane"
+      ;;
+    *)                              # anything else → plain command in the pane
+      "$HERDR" pane run "$pane" "$custom" >/dev/null
+      ;;
+  esac
+fi
+
+"$HERDR" workspace focus "$ws" >/dev/null 2>&1 || true
+if [[ "${HERDR_ENV:-}" == "1" ]]; then
+  echo "seat $name ready in herdr workspace $ws (you are already inside herdr)"
+else
+  exec "$HERDR"
+fi

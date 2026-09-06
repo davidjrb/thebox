@@ -1,0 +1,12 @@
+# /etc/systemd/system/seat-alert@.service — instantiated by OnFailure=seat-alert@%n.service
+# Edit GROUP and TAB (which seat owns the unit) and USER (the account that runs herdr).
+[Unit]
+Description=Route a failed unit (%i) to the seat that owns it: inbox note + wake its herdr agent
+
+[Service]
+Type=oneshot
+User=USER
+Group=USER
+Environment=HOME=/home/USER
+Environment=PATH=/home/USER/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/USER/bin/seat-alert GROUP TAB %i "%i entered failed state"

@@ -1,0 +1,77 @@
+# /etc/caddy/Caddyfile — the hub
+#
+# Static pages come straight from /srv/www (checkout of the site repo); everything else
+# (home, seat pages, send, inbox, board, search, api) goes to the hub on 127.0.0.1:8090.
+# Rule: a request is static only if it names an existing file, or a directory that
+# has an index.html. A seat directory without index.html is a hub page.
+
+(hub) {
+	root * /srv/www
+	encode gzip
+
+	# Soft login for everything (pages, hub, send, inbox, board, terminal) — the git webhook
+	# (/api/deploy) is exempt because it carries its own HMAC secret. The user/hash live in
+	# /etc/caddy/auth.caddy (not in this repo); see auth.caddy.example.
+	@needauth not path /api/deploy
+	import /etc/caddy/auth.caddy
+
+	@git path /.git /.git/*
+	handle @git {
+		respond 404
+	}
+
+	# browser terminal: ttyd (websocket) attaches to the herdr pane named in ?arg=<group>&arg=<tab>.
+	# /terminal/ is the hub's wrapper page (mobile viewport, zoom, key row); it frames /tty/.
+	handle /tty* {
+		reverse_proxy 127.0.0.1:7681
+	}
+
+	@page file {
+		try_files {path}/index.html
+	}
+	handle @page {
+		file_server {
+			hide /srv/www/.git
+		}
+	}
+
+	@asset {
+		file {
+			try_files {path}
+		}
+		not path */
+	}
+	handle @asset {
+		file_server {
+			hide /srv/www/.git
+		}
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:8090
+	}
+	log {
+		output file /var/log/caddy/hub.log {
+			roll_size 10mb
+			roll_keep 3
+		}
+	}
+}
+
+# Plain HTTP on the LAN. Add your hostnames / LAN IP here.
+http://localhost, http://HOSTNAME {
+	import hub
+}
+
+# Optional: HTTPS on a Tailscale tailnet. Caddy fetches the certificate from tailscaled
+# (needs `tailscale set --operator=caddy` and HTTPS enabled in the tailnet admin console).
+# https://HOSTNAME.TAILNET.ts.net {
+# 	import hub
+# }
+
+# Optional: HTTPS on the bare hostname with Caddy's own local CA (browsers warn once per device;
+# trust /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt to silence it).
+# https://HOSTNAME {
+# 	import hub
+# 	tls internal
+# }

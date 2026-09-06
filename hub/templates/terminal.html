@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="mobile-web-app-capable" content="yes">
+<title>{{ seat }}{% if tab %} · {{ tab }}{% endif %} — terminal</title>
+<style>
+  :root{--bg:#141412;--fg:#e8e6e0;--bar:#1d1c19;--key:#26251f;--line:#2c2b27;--accent:#e08a4a}
+  html,body{margin:0;background:var(--bg);color:var(--fg);font:14px system-ui,sans-serif}
+  body{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+  .bar{flex:0 0 30px;display:flex;align-items:center;gap:.6rem;padding:0 .5rem;font-size:13px;background:var(--bar);border-bottom:1px solid var(--line)}
+  .bar a{color:var(--accent);text-decoration:none}.bar .seat{font-weight:600}.grow{flex:1}
+  .bar button{background:transparent;color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:0 .5rem;height:22px;font:inherit;cursor:pointer}
+  .muted{opacity:.6}.v{opacity:.35;font-size:11px}
+  .row{flex:0 0 32px;display:flex;gap:.3rem;align-items:center;padding:0 .4rem;overflow-x:auto;white-space:nowrap;background:var(--bar);border-bottom:1px solid var(--line)}
+  .row button{background:var(--key);color:var(--fg);border:1px solid var(--line);border-radius:5px;height:24px;min-width:32px;padding:0 .4rem;font:12px ui-monospace,monospace;flex:0 0 auto;-webkit-tap-highlight-color:transparent}
+  .row button:active{background:var(--accent);color:#000}
+  .row button.mod.on{background:var(--accent);color:#000;font-weight:700}
+  .row .hint{opacity:.55;font-size:11px;margin-left:.3rem}
+  #morekeys,#letters{display:none}
+  body.more #keys{display:none}body.more #morekeys{display:flex}
+  body.mod #keys,body.mod #morekeys{display:none}body.mod #letters{display:flex}
+  body.nokeys .row{display:none}
+  body.nobar .bar,body.nobar .row{display:none}
+  .wrap{flex:1 1 auto;min-height:0;position:relative}
+  iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:var(--bg)}
+</style>
+</head>
+<body>
+<div class="bar">
+  <a href="/">hub</a> <span class="muted">/</span> <a href="/{{ seat }}/" class="seat">{{ seat }}</a>{% if tab %} <span class="muted">·</span> <b>{{ tab }}</b>{% endif %} <span class="v">v9 tabs</span> <span class="v" id="mode"></span>
+  <span class="grow"></span>
+  <button id="minus" title="smaller font">A−</button><span id="pct" class="muted">14px</span><button id="plus" title="bigger font">A+</button>
+  <button id="keystoggle" title="show/hide key row">⌨</button>
+  <button id="full" title="hide bars (tap the top edge to restore)">⤢</button>
+</div>
+<div class="row" id="keys">
+  <button data-key="newline" title="newline without sending (Ctrl-J)">⏎ nl</button>
+  <button data-key="up">↑</button>
+  <button data-key="down">↓</button>
+  <button data-key="left">←</button>
+  <button data-key="right">→</button>
+  <button data-wheel="-10" title="scroll up (wheel)">PgUp</button>
+  <button data-wheel="10" title="scroll down (wheel)">PgDn</button>
+  <button id="more" title="more keys">⋯</button>
+</div>
+<div class="row" id="morekeys">
+  <button id="less">✕</button>
+  <button class="mod" data-mod="ctrl" title="tap: next letter is Ctrl+letter · double-tap: lock">Ctrl</button>
+  <button class="mod" data-mod="alt" title="tap: next letter is Alt+letter · double-tap: lock">Alt</button>
+  <button data-key="esc">Esc</button>
+  <button data-key="tab">Tab</button>
+  <button data-key="ctrl-c">^C</button>
+  <span class="hint">in Claude Code, \ then Enter = newline</span>
+</div>
+<div class="row" id="letters"></div>
+<div class="wrap"><iframe id="tty" src="/tty/?arg={{ seat }}{% if tab %}&arg={{ tab }}{% endif %}" allow="clipboard-read; clipboard-write"></iframe></div>
+<script>
+(function(){
+  var SEAT={{ seat|tojson }}, TAB={{ tab|tojson }}, body=document.body, frame=document.getElementById("tty");
+  function win(){ try{ return frame.contentWindow; }catch(_){ return null; } }
+  function doc(){ try{ return frame.contentDocument; }catch(_){ return null; } }
+  function term(){ var w=win(); return w && w.term; }
+  function refit(){ var t=term(); if(t&&t.fit){ try{ t.fit(); }catch(_){} } }
+  // --- font size via ttyd's exposed xterm instance (window.term in the frame)
+  var KEY="terminal.fontSize", size=0;
+  try{ size=parseInt(localStorage.getItem(KEY),10)||0; }catch(_){}
+  if(!size) size = matchMedia("(pointer:coarse)").matches ? 16 : 14;
+  function applyFont(){
+    size=Math.min(40,Math.max(8,size)); document.getElementById("pct").textContent=size+"px";
+    try{ localStorage.setItem(KEY,size); }catch(_){}
+    var t=term(); if(t){ t.options.fontSize=size; setTimeout(refit,30); }
+  }
+  document.getElementById("plus").onclick=function(){ size+=1; applyFont(); };
+  document.getElementById("minus").onclick=function(){ size-=1; applyFont(); };
+  frame.addEventListener("load",function(){ var n=0, id=setInterval(function(){ if(term()||++n>50){ clearInterval(id); applyFont(); attachTouch(); } },100); });
+  applyFont();
+  // --- bars
+  var KEYSKEY="terminal.keys";
+  try{ if(localStorage.getItem(KEYSKEY)==="0") body.classList.add("nokeys"); }catch(_){}
+  document.getElementById("keystoggle").onclick=function(){ body.classList.toggle("nokeys"); try{ localStorage.setItem(KEYSKEY, body.classList.contains("nokeys")?"0":"1"); }catch(_){} setTimeout(refit,60); };
+  document.getElementById("full").onclick=function(){ body.classList.add("nobar"); setTimeout(refit,60); };
+  function restore(y){ if(body.classList.contains("nobar") && y<12){ body.classList.remove("nobar"); setTimeout(refit,60); } }
+  document.addEventListener("touchstart",function(e){ restore(e.touches[0].clientY); },{passive:true});
+  document.addEventListener("click",function(e){ restore(e.clientY); });
+  window.addEventListener("resize",function(){ setTimeout(refit,60); });
+  // --- scrolling = wheel events inside xterm.js; herdr forwards them to the pane app (Claude Code
+  //     scrolls its own transcript) or scrolls pane history itself. A phone never produces wheel
+  //     events, so one-finger drags are converted here; two fingers are left to the browser (pinch zoom).
+  function lineH(){ var t=term(); try{ var h=t._core._renderService.dimensions.css.cell.height; if(h) return h; }catch(_){} return size*1.25; }
+  function wheel(n, x, y){                 // n>0: toward live/bottom, n<0: into history
+    var d=doc(), w=win(); if(!d||!w) return;
+    var el=d.querySelector(".xterm-screen")||d.querySelector(".xterm"); if(!el) return;
+    var r=el.getBoundingClientRect(); if(x==null) x=r.left+r.width/2; if(y==null) y=r.top+r.height/2;
+    var dy=Math.sign(n)*lineH();
+    for(var i=0;i<Math.abs(n);i++) el.dispatchEvent(new w.WheelEvent("wheel",{deltaY:dy,deltaMode:0,clientX:x,clientY:y,bubbles:true,cancelable:true}));
+  }
+  function attachTouch(){
+    var d=doc(); if(!d||d.__hubTouch) return; d.__hubTouch=true;
+    var lastY=null, acc=0;
+    d.addEventListener("touchstart",function(e){ lastY=e.touches.length===1?e.touches[0].clientY:null; acc=0; },{capture:true,passive:true});
+    d.addEventListener("touchmove",function(e){
+      if(e.touches.length!==1){ lastY=null; return; }          // pinch etc: browser's business
+      if(lastY===null){ lastY=e.touches[0].clientY; return; }
+      e.preventDefault(); e.stopPropagation();                  // no page pan, no text selection
+      var t=e.touches[0], lh=lineH(); acc+=lastY-t.clientY; lastY=t.clientY;   // finger up => content down
+      var n=Math.trunc(acc/lh); if(!n) return; acc-=n*lh; wheel(n,t.clientX,t.clientY);
+    },{capture:true,passive:false});
+    d.addEventListener("touchend",function(){ lastY=null; },{capture:true,passive:true});
+  }
+  // --- keys: every button = herdr pane send-keys on this seat, via the hub
+  function send(key){
+    fetch("/api/keys",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({session:SEAT,key:key,tab:TAB})})
+      .then(function(r){ return r.json(); }).then(function(j){ if(!j.ok) alert(j.error||"failed"); })
+      .catch(function(e){ alert(e.message); });
+  }
+  // --- modifiers: Ctrl / Alt swap the key row for a letter row (same height); tap = one combo, double-tap = lock
+  var mod=null, locked=false, lastTap=0, letters=document.getElementById("letters");
+  var LET="abcdefghijklmnopqrstuvwxyz".split("").concat(["space","[","]","\\","^","_","enter"]);
+  function label(c){ return c==="space"?"␣":c==="enter"?"⏎":c; }
+  function setMod(m){
+    mod=m; body.classList.toggle("mod",!!m); if(!m) body.classList.remove("more");
+    document.querySelectorAll(".mod").forEach(function(b){ b.classList.toggle("on", b.dataset.mod===m); b.textContent=(b.dataset.mod==="ctrl"?"Ctrl":"Alt")+((b.dataset.mod===m&&locked)?" 🔒":""); });
+    if(m){
+      letters.innerHTML='<button data-cancel="1">✕ '+(m==="ctrl"?"Ctrl":"Alt")+(locked?" 🔒":"")+'</button>'+LET.map(function(c){ return '<button data-letter="'+c+'">'+label(c)+'</button>'; }).join("");
+      letters.querySelector("[data-cancel]").addEventListener("click",function(ev){ ev.preventDefault(); locked=false; setMod(null); });
+      letters.querySelectorAll("[data-letter]").forEach(function(b){ b.addEventListener("click",function(ev){ ev.preventDefault();
+        send(mod+"-"+b.dataset.letter); if(!locked) setMod(null); }); });
+    }
+  }
+  document.querySelectorAll(".mod").forEach(function(b){
+    b.addEventListener("click",function(ev){ ev.preventDefault();
+      var now=Date.now(), m=b.dataset.mod;
+      if(mod===m && now-lastTap<400){ locked=!locked; setMod(m); }
+      else if(mod===m){ locked=false; setMod(null); }
+      else { locked=false; setMod(m); }
+      lastTap=now; });
+  });
+  document.getElementById("more").onclick=function(){ body.classList.add("more"); };
+  document.getElementById("less").onclick=function(){ body.classList.remove("more"); };
+  document.querySelectorAll("[data-key]").forEach(function(b){ b.addEventListener("click",function(ev){ ev.preventDefault(); send(b.dataset.key); }); });
+  document.querySelectorAll("[data-wheel]").forEach(function(b){ b.addEventListener("click",function(ev){ ev.preventDefault(); wheel(parseInt(b.dataset.wheel,10)); }); });
+})();
+</script>
+</body>
+</html>

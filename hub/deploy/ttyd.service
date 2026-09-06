@@ -1,0 +1,24 @@
+[Unit]
+Description=ttyd — browser terminal for herdr seats (127.0.0.1:7681, Caddy /tty/, framed by the hub at /terminal/)
+After=network.target
+
+[Service]
+# Replace USER with the account that owns the seats.
+User=USER
+Group=USER
+Environment=HOME=/home/USER
+Environment=TERM=xterm-256color
+# -W writable, -a pass ?arg= from the URL to the command, -b base path behind Caddy,
+# -i loopback only, -t client options for xterm.js
+ExecStart=/usr/local/bin/ttyd -i 127.0.0.1 -p 7681 -W -a -b /tty \
+  -t titleFixed=hub \
+  -t rendererType=canvas \
+  -t fontSize=14 \
+  -t disableLeaveAlert=true \
+  -t enableSixel=false \
+  /home/USER/hub/deploy/ttyd-seat.sh
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

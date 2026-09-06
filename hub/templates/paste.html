@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}paste — hub{% endblock %}
+{% block body %}
+<h1>Paste bucket</h1>
+<p class="muted small">Copy-paste between devices. Every paste is a file in <code>~/paste/</code>.</p>
+<form class="card" method="post" action="/paste">
+  <label class="lbl" for="text">New paste</label>
+  <textarea id="text" name="text" rows="4" placeholder="Paste text here, then Save. Ctrl/Cmd-Enter saves."></textarea>
+  <div class="row" style="margin-top:.5rem"><button class="primary" type="submit">Save</button></div>
+</form>
+{% if items %}
+<form method="post" action="/paste/file" onsubmit="return confirm('File all pastes into the wiki (Unsorted) and empty the bucket?')" style="margin:.2rem 0 .8rem">
+  <button type="submit">File &amp; clear → wiki</button>
+</form>
+{% endif %}
+{% for it in items %}
+<div class="card">
+  <div class="row">
+    <span class="muted small grow">{{ it.time|fmt_ts }} · {{ it.name }}</span>
+    <button type="button" class="small copybtn">Copy</button>
+    <form class="inline" method="post" action="/paste/delete" onsubmit="return confirm('Delete this paste?')">
+      <input type="hidden" name="name" value="{{ it.name }}">
+      <button type="submit" class="ghost small" title="delete">✕</button>
+    </form>
+  </div>
+  <pre class="pastebody">{{ it.text }}</pre>
+</div>
+{% else %}
+<p class="muted">Nothing here yet.</p>
+{% endfor %}
+{% endblock %}
+{% block scripts %}
+<script>
+function copyFallback(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+  ta.remove(); return ok;
+}
+document.querySelectorAll('.copybtn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const text = btn.closest('.card').querySelector('.pastebody').textContent.replace(/\n$/, '');
+    const done = ok => { btn.textContent = ok ? 'Copied ✓' : 'Copy failed'; setTimeout(() => { btn.textContent = 'Copy'; }, 1500); };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => done(true), () => done(copyFallback(text)));
+    } else done(copyFallback(text));
+  });
+});
+document.getElementById('text').addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') e.target.form.requestSubmit();
+});
+</script>
+{% endblock %}

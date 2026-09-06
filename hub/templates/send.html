@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}send — hub{% endblock %}
+{% block body %}
+<h1>Send to a seat</h1>
+<p class="muted small">Writes <code>~/inbox/&lt;seat&gt;/&lt;time&gt;_&lt;slug&gt;/note.md</code> (+ your files), then nudges the agent through herdr. The file is the message; the pane nudge is just a doorbell.</p>
+<div class="card">
+  <label class="lbl" for="session">Work group</label>
+  <div class="row">
+    <select id="session"></select>
+    <button type="button" class="ghost" id="refresh">↻</button>
+    <span class="muted small" id="hint">loading…</span>
+  </div>
+  <div class="row" id="tabrow" hidden>
+    <label class="lbl" for="tab" style="margin:0">Tab</label>
+    <select id="tab"></select>
+  </div>
+</div>
+<div class="card">
+  <label class="lbl" for="prompt">Prompt</label>
+  <textarea id="prompt" rows="6" placeholder="Message for the seat (multiline OK). Ctrl/Cmd-Enter sends."></textarea>
+</div>
+<div class="card">
+  <label class="lbl">Attachments <span class="muted small">(drop files anywhere, or paste an image)</span></label>
+  <div class="drop" id="dropzone">
+    <button type="button" class="ghost" id="addbtn">+ Add files</button>
+    <input type="file" id="file" multiple hidden>
+  </div>
+  <div class="pending" id="pending"></div>
+</div>
+<div class="card">
+  <label class="lbl">Mode</label>
+  <label class="small"><input type="radio" name="mode" value="prompt" checked> <b>prompt</b> — types the notice into the pane + toast</label><br>
+  <label class="small"><input type="radio" name="mode" value="ping"> <b>ping</b> — toast only, nothing typed (non-intrusive; the seat finds it in its inbox)</label>
+</div>
+<button type="button" class="primary" id="send">Send →</button>
+<div id="prog" hidden><div class="bar"></div></div>
+<div id="result"></div>
+{% endblock %}
+{% block scripts %}<script>hubSend({{ preselect|tojson }});</script>{% endblock %}

@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+"""seat rename <old> <new> — one command: stop idle agent, move home/inbox/transcripts,
+rename herdr workspace, git-mv the seat record (+push), restart the engine resumed."""
+import json, os, re, signal, subprocess, sys, time
+from pathlib import Path
+
+HOME = Path.home()
+HERDR = os.environ.get("HERDR", str(HOME / ".local/bin/herdr"))
+old, new = sys.argv[1], sys.argv[2]
+
+def die(m): print(f"seat rename: {m}", file=sys.stderr); sys.exit(1)
+def h(*a):
+    r = subprocess.run([HERDR, *a], capture_output=True, text=True, timeout=15)
+    if r.returncode != 0: die(f"herdr {' '.join(a)}: {(r.stderr or r.stdout).strip()}")
+    return json.loads(r.stdout) if r.stdout.strip() else {}
+
+for n in (old, new):
+    if not re.match(r"^[A-Za-z0-9_-]+$", n): die(f"bad name {n!r}")
+if old == new: die("old and new are the same")
+WWW = Path(os.environ.get("SEAT_WWW", "/srv/www"))
+www_old, www_new = WWW / old, WWW / new
+if not www_old.is_dir(): die(f"no seat record at {www_old}")
+if www_new.exists(): die(f"{www_new} already exists")
+home_old, home_new = HOME / old, HOME / new
+if home_new.exists(): die(f"{home_new} already exists")
+agent_new = new.lower()
+
+# --- live workspace / agent
+ws = next((w for w in h("workspace", "list")["result"]["workspaces"] if w["label"] == old), None)
+agent = None
+if ws:
+    agent = next((a for a in h("agent", "list")["result"]["agents"]
+                  if a["workspace_id"] == ws["workspace_id"]), None)
+if agent and agent["agent_status"] in ("working", "blocked"):
+    die(f"agent in '{old}' is {agent['agent_status']} — let it settle first")
+pane = agent["pane_id"] if agent else None
+if agent:  # stop it so nothing holds the dirs we are about to move
+    info = h("pane", "process-info", "--pane", pane)["result"]["process_info"]
+    pids = [p["pid"] for p in info.get("foreground_processes", [])]
+    for pid in pids: os.kill(pid, signal.SIGTERM)
+    for _ in range(40):
+        if not any(Path(f"/proc/{p}").exists() for p in pids): break
+        time.sleep(0.25)
+    else: die("agent process did not exit on SIGTERM")
+    print(f"stopped {agent['agent']} agent in pane {pane}")
+
+# --- engine session stores, keyed on the home path
+def dashed(p): return str(p).replace("/", "-")
+def home_rel_dashed(p):  # omp scheme: /home/u/X -> -X ; /home/u -> -
+    s = str(p)
+    return dashed(s[len(str(HOME)):]) or "-" if s.startswith(str(HOME)) else dashed(s)
+# Guard against a shared-home hazard: a session-store dir is keyed on the home a
+# session was BORN in, so if another seat's session was born in ~/<old> too (historic shared
+# home), moving the whole dir drags that other seat's session — which then corrupts on its next
+# resume. Refuse if any OTHER live agent's session path lives inside a dir we're about to move.
+def live_session_paths_excluding(this_agent):
+    out = []
+    for a in h("agent", "list").get("result", {}).get("agents", []):
+        if a.get("name") and a.get("name") == this_agent:
+            continue
+        v = (a.get("agent_session") or {}).get("value", "")
+        if v.startswith("/"):
+            out.append(Path(v))
+    return out
+foreign = live_session_paths_excluding(agent_new)
+
+moves = []
+if home_old.exists():
+    moves.append((home_old, home_new))
+for base, key in ((HOME / ".claude/projects", dashed), (HOME / ".omp/agent/sessions", home_rel_dashed)):
+    a, b = base / key(home_old), base / key(home_new)
+    if a.exists():
+        if b.exists(): die(f"{b} already exists")
+        clash = [str(p) for p in foreign if a in p.parents]
+        if clash:
+            die(f"{a} also holds another live seat's session ({clash[0]}) — disentangle it first "
+                f"(move that seat's session to its own store), then rerun")
+        moves.append((a, b))
+for a, b in moves:
+    a.rename(b); print(f"moved {a} -> {b}")
+if home_new.exists() and not home_old.exists():
+    home_old.symlink_to(new)  # old absolute paths inside resumed sessions keep working
+    print(f"compat symlink {home_old} -> {new}")
+if (HOME / "inbox" / old).exists():
+    (HOME / "inbox" / old).rename(HOME / "inbox" / new); print(f"moved inbox -> ~/inbox/{new}")
+
+# --- seat record: git mv + push (publishes; the hub follows the record)
+for cmd in (["git", "mv", old, new],
+            ["git", "commit", "-q", "-m", f"seat rename: {old} -> {new} (via `seat rename`)"],
+            ["git", "push", "-q"]):
+    r = subprocess.run(cmd, cwd=str(WWW), capture_output=True, text=True)
+    if r.returncode != 0: die(f"{' '.join(cmd)}: {(r.stderr or r.stdout).strip()}")
+print(f"seat record: git mv {old} {new}, committed + pushed")
+
+# --- herdr workspace + agent
+if ws:
+    h("workspace", "rename", ws["workspace_id"], new)
+    print(f"herdr workspace {ws['workspace_id']} relabelled '{new}'")
+if agent:  # restart the engine, resumed, under the new agent name
+    sj = {}
+    try: sj = json.loads((www_new / "seat.json").read_text())
+    except Exception: pass
+    words = (sj.get("cmd") or "").split()
+    if words:
+        kind, args = os.path.basename(words[0]), words[1:]
+    else:
+        kind, args = "claude", ["--dangerously-skip-permissions"]
+    if kind == "omp":
+        sess = sorted((HOME / ".omp/agent/sessions" / home_rel_dashed(home_new)).glob("*.jsonl"))
+        if sess: args += ["-r", str(sess[-1])]
+    elif kind == "claude":
+        if list((HOME / ".claude/projects" / dashed(home_new)).glob("*.jsonl")): args += ["--continue"]
+    r = subprocess.run([HERDR, "agent", "start", agent_new, "--kind", kind, "--pane", pane, "--", *args],
+                       capture_output=True, text=True, timeout=45)
+    print(f"restarted as agent '{agent_new}' ({kind}"
+          + (", resumed)" if ("-r" in args or "--continue" in args) else ", fresh session)")
+          + ("" if r.returncode == 0 else f" — start reported: {(r.stderr or r.stdout).strip()[:120]}"))
+
+print(f"\nleft for a human/agent: prose in {www_new}/SEAT.md and seat.json (title, status) still says '{old}'.")

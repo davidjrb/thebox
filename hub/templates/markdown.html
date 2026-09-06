@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — hub{% endblock %}
+{% block body %}
+{% if msg %}
+<p class="small">
+  <a href="/inbox/{{ msg.seat }}/">inbox {{ msg.seat }}</a> ·
+  {% if msg.read %}read{% else %}<b class="badge">unread</b>{% endif %}
+  {% if msg.files %} · 📎 {% for f in msg.files %}<a href="/inbox/{{ msg.seat }}/{{ msg.id }}/{{ f }}">{{ f }}</a>{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
+  · <form method="post" action="/api/inbox/{{ msg.seat }}/{{ msg.id }}/read" class="inline">
+      <input type="hidden" name="back" value="{{ request.path }}">
+      {% if msg.read %}<input type="hidden" name="undo" value="1"><button class="ghost small">mark unread</button>{% else %}<button class="ghost small">mark read</button>{% endif %}
+    </form>
+  {% if raw_url %} · <a href="{{ raw_url }}">raw</a>{% endif %}
+</p>
+{% endif %}
+<article class="md">{{ body_html|safe }}</article>
+{% if path %}<p class="muted small"><code>{{ path }}</code></p>{% endif %}
+{% endblock %}

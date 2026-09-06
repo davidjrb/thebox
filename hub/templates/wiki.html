@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}wiki — hub{% endblock %}
+{% block body %}
+<h1>Command library</h1>
+<p class="muted small">Useful commands, curated. Lives in <a href="{{ www_repo_url }}/src/branch/main/wiki">the site repo, /wiki</a> — edit the markdown there or in <code>/srv/www/wiki/</code>, push = publish. The paste bucket's “File &amp; clear” lands in <b>Unsorted</b>.</p>
+<div class="wiki">
+  <nav class="wtoc">
+    {% for s in sections %}<a href="#w-{{ s.slug }}">{{ s.title }}</a>{% endfor %}
+  </nav>
+  <div>
+    {% for s in sections %}
+    <section class="wsec md" id="w-{{ s.slug }}">
+      {{ s.html|safe }}
+      <div class="small"><a class="muted" href="{{ www_repo_url }}/src/branch/main/wiki/{{ s.file }}">source: wiki/{{ s.file }}</a></div>
+    </section>
+    {% else %}
+    <p class="muted">No wiki pages yet — drop markdown files into <code>/srv/www/wiki/</code>.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function wikiCopyFallback(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+  ta.remove(); return ok;
+}
+document.querySelectorAll('.wsec pre').forEach(pre => {
+  const wrap = document.createElement('div');
+  wrap.className = 'codewrap';
+  pre.parentNode.insertBefore(wrap, pre);
+  wrap.appendChild(pre);
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.className = 'cpy'; btn.textContent = 'copy';
+  wrap.appendChild(btn);
+  btn.addEventListener('click', () => {
+    const text = pre.textContent.replace(/\n$/, '');
+    const done = ok => { btn.textContent = ok ? 'copied ✓' : 'failed'; setTimeout(() => { btn.textContent = 'copy'; }, 1500); };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => done(true), () => done(wikiCopyFallback(text)));
+    } else done(wikiCopyFallback(text));
+  });
+});
+</script>
+{% endblock %}

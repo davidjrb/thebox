@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}search{% if q %}: {{ q }}{% endif %} — hub{% endblock %}
+{% block body %}
+<h1>Search</h1>
+<form action="/search" method="get" class="bigsearch">
+  <input type="search" name="q" value="{{ q }}" placeholder="regex ok · case-insensitive · pages, seats, inbox notes, board" autofocus>
+  <button>Search</button>
+</form>
+{% if err %}<p class="err">{{ err }}</p>{% endif %}
+{% if q and not results and not err %}<p class="muted">no matches for <code>{{ q }}</code></p>{% endif %}
+{% for r in results %}
+<div class="hit">
+  <div><a href="{{ r.url }}">{{ r.url }}</a> <span class="muted small">{{ r.path }}</span></div>
+  {% for l in r.lines %}<div class="line"><span class="muted small">{{ l.n }}</span> {{ l.text }}</div>{% endfor %}
+</div>
+{% endfor %}
+{% endblock %}

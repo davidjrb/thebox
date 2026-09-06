@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}{{ seat.name }} — hub{% endblock %}
+{% block body %}
+<h1><span class="dot {{ ('st-' + live.status) if live else 'off' }}"></span> {{ seat.name }} {% if seat.title %}<span class="muted">— {{ seat.title }}</span>{% endif %}</h1>
+<p class="small">
+  {% if live %}herdr workspace: <b class="st st-{{ live.status }}">{{ live.status }}</b>, {{ rows|length }} tab{{ '' if rows|length == 1 else 's' }}{% if live.focused %}, focused{% endif %}
+  {% else %}<span class="warn">no herdr workspace named <code>{{ seat.name }}</code> — <code>seat {{ seat.name }}</code> on the box starts it</span>{% endif %}
+  {% if seat.remote_control %} · 📱 Remote Control: <b>{{ seat.remote_control }}</b>{% endif %}
+  · <a href="/send?seat={{ seat.name }}">send</a> · <a href="/inbox/{{ seat.name }}/">inbox</a>
+  {% if live %} · <a href="/terminal/?arg={{ seat.name }}">terminal</a>{% endif %}
+</p>
+<div class="tabs">
+{% for r in rows %}
+  <div class="tabrow{% if not r.live %} off{% endif %}">
+    <span class="dot {{ ('st-' + r.status) if r.live else 'off' }}"></span>
+    <span class="tabname">{{ r.name }}</span>
+    <span class="who small">{% if r.live %}<b class="st st-{{ r.status }}">{{ r.status }}</b>{% else %}<span class="muted">not running</span>{% endif %}
+      {% if r.agent %}· <code>{{ r.agent }}</code>{% endif %}{% if r.engine %} <span class="muted">{{ r.engine }}</span>{% endif %}
+      {% if r.cwd_short %}<span class="muted">· {{ r.cwd_short }}</span>{% endif %}
+      {% if r.resume %}<span class="muted" title="resume id">· resume {{ r.resume[:8] }}…</span>{% endif %}
+      {% if r.title %}<span class="muted ttl">“{{ r.title[:60] }}”</span>{% endif %}</span>
+    <span class="links small">
+      {% if r.live %}<a href="/send?seat={{ seat.name }}{% if r.tab %}&tab={{ r.tab }}{% endif %}">send</a> <a href="/terminal/?arg={{ seat.name }}{% if r.tab %}&tab={{ r.tab }}{% endif %}">terminal</a>
+      <a href="#" class="peek" data-session="{{ seat.name }}" data-tab="{{ r.tab }}">peek</a>{% endif %}
+    </span>
+  </div>
+{% endfor %}
+</div>
+{% if seat.status %}<p class="status big">{{ seat.status }} <span class="muted small">{{ seat.updated }}</span></p>{% endif %}
+<pre id="peekout" class="pane" hidden></pre>
+
+<div class="two">
+  <section>
+    <h2>Charter <span class="small muted">SEAT.md</span></h2>
+    {% if charter_html %}<div class="md">{{ charter_html|safe }}</div>
+    {% else %}<p class="muted">no SEAT.md — write one: what this seat is for, standing orders, where its files are.</p>{% endif %}
+  </section>
+  <section>
+    <h2>Pages</h2>
+    <ul>
+    {% for p in pages %}<li><a href="{{ p.url }}">{{ p.title }}</a> <span class="muted small">{{ p.date }}</span>{% if not p.filed %} <span class="warn small">unfiled</span>{% endif %}
+      {% if p.description %}<div class="muted small">{{ p.description }}</div>{% endif %}</li>
+    {% else %}<li class="muted">none yet — put <code>index.html</code> + <code>page.json</code> in <code>/srv/www/{{ seat.name }}/&lt;page&gt;/</code></li>{% endfor %}
+    </ul>
+    <h2>Inbox <span class="small muted">latest {{ msgs|length }}</span></h2>
+    <ul>
+    {% for m in msgs %}<li>{% if not m.read %}<b class="badge">unread</b> {% endif %}<a href="{{ m.url }}">{{ m.time|fmt_ts }}</a> {{ (m.prompt.splitlines() or [m.slug])[0][:80] }}{% if m.files %} <span class="muted small">📎 {{ m.files|length }}</span>{% endif %}</li>
+    {% else %}<li class="muted">empty</li>{% endfor %}
+    </ul>
+    {% if seat_json %}<h2>seat.json</h2><pre class="code">{{ seat_json }}</pre>{% endif %}
+  </section>
+</div>
+{% endblock %}

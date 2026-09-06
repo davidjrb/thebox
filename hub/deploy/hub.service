@@ -1,0 +1,21 @@
+[Unit]
+Description=hub — home page, send/inbox, board, search (Flask on 127.0.0.1:8090, behind Caddy; talks to herdr)
+After=network.target
+
+[Service]
+# Replace USER with the account that owns the seats (herdr runs as that user).
+User=USER
+Group=USER
+WorkingDirectory=/home/USER/hub
+Environment=HOME=/home/USER
+Environment=HUB_WWW=/srv/www
+Environment=HUB_INBOX=/home/USER/inbox
+Environment=HUB_GITEA_URL=http://localhost:3000
+Environment=HUB_WWW_REPO_URL=http://localhost:3000/seats/www
+Environment=HUB_OWNER=owner
+ExecStart=/usr/bin/python3 /home/USER/hub/app.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

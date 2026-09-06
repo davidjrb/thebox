@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}inbox{% if seat %} — {{ seat }}{% endif %} — hub{% endblock %}
+{% block body %}
+{% if rows is not none %}
+<h1>Inbox</h1>
+<p class="muted small">One directory per seat under <code>~/inbox/</code>; one directory per message inside (<code>note.md</code> + attachments). A seat marks a message handled with <code>touch READ</code>.</p>
+<table class="list">
+  <thead><tr><th>seat</th><th>unread</th><th>total</th><th>latest</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr><td><a href="/inbox/{{ r.seat }}/">{{ r.seat }}</a></td>
+      <td>{% if r.unread %}<b class="badge">{{ r.unread }}</b>{% else %}<span class="muted">0</span>{% endif %}</td>
+      <td>{{ r.count }}</td>
+      <td>{% if r.latest %}<a href="{{ r.latest.url }}">{{ r.latest.time|fmt_ts }}</a> <span class="muted">{{ (r.latest.prompt.splitlines() or [r.latest.slug])[0][:80] }}</span>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="4" class="muted">nothing sent yet — <a href="/send">send something</a></td></tr>{% endfor %}
+  </tbody>
+</table>
+{% else %}
+<h1>Inbox — {{ seat }} <a class="small" href="/{{ seat }}/">seat page</a> · <a class="small" href="/send?seat={{ seat }}">send</a></h1>
+<table class="list">
+  <thead><tr><th>when</th><th>status</th><th>prompt</th><th>files</th><th></th></tr></thead>
+  <tbody>
+  {% for m in msgs %}
+    <tr class="{{ 'unread' if not m.read else '' }}">
+      <td><a href="{{ m.url }}">{{ m.time|fmt_ts }}</a></td>
+      <td>{% if m.read %}<span class="muted">read</span>{% else %}<b class="badge">unread</b>{% endif %}</td>
+      <td>{{ (m.prompt.splitlines() or [''])[0][:120] }}{% if not m.prompt %}<span class="muted">{{ m.slug }}</span>{% endif %}</td>
+      <td>{% for f in m.files %}<a href="/inbox/{{ seat }}/{{ m.id }}/{{ f }}">{{ f }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</td>
+      <td><form method="post" action="/api/inbox/{{ seat }}/{{ m.id }}/read" class="inline">
+          <input type="hidden" name="back" value="/inbox/{{ seat }}/">
+          {% if m.read %}<input type="hidden" name="undo" value="1"><button class="ghost small">mark unread</button>
+          {% else %}<button class="ghost small">mark read</button>{% endif %}</form></td></tr>
+  {% else %}<tr><td colspan="5" class="muted">empty</td></tr>{% endfor %}
+  </tbody>
+</table>
+<p class="small"><a href="/inbox/{{ seat }}/INBOX.md">INBOX.md</a> is the file version of this table.</p>
+{% endif %}
+{% endblock %}

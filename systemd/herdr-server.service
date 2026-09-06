@@ -1,0 +1,14 @@
+[Unit]
+Description=herdr server — seat workspaces and agents (headless; attach with `herdr`)
+# Not from herdr's docs (0.8.2 has no autostart story): this unit exists so a reboot brings
+# the seats back without anyone logging in (paired with `loginctl enable-linger USER`).
+# NEVER restart this unit casually — stopping the server kills every pane process (all seats).
+# herdr's claude/omp integrations re-resume agents when the layout is restored after a start.
+
+[Service]
+ExecStart=%h/.local/bin/herdr server
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}hub — home{% endblock %}
+{% block body %}
+
+<section class="tools">
+  <a class="tool" href="/send"><b>Send</b><span>prompt + files to a tab</span></a>
+  <a class="tool" href="/inbox/"><b>Inbox</b><span>what each group received</span></a>
+  <a class="tool" href="/board"><b>Board</b><span>{{ open_count }} open item{{ '' if open_count == 1 else 's' }}</span></a>
+  <a class="tool" href="/wiki"><b>Wiki</b><span>command library</span></a>
+  <a class="tool" href="/paste"><b>Paste</b><span>copy-paste bucket between devices</span></a>
+  <a class="tool" href="/terminal/?arg=all"><b>Terminal</b><span>full herdr UI — every group</span></a>
+  <a class="tool" href="{{ gitea_url }}" target="_blank" rel="noopener"><b>Gitea ↗</b><span>repos, issues, mirrors</span></a>
+</section>
+
+<h2>Work groups <span class="muted small">— one card per herdr workspace, one row per tab</span></h2>
+{% if not herdr_up %}<p class="warn small">herdr server not reachable — every dot is grey; nothing below is live.</p>{% endif %}
+{% if not cards and not orphan_sessions %}
+<p class="muted">No seats yet. A seat is a directory in <code>/srv/www/&lt;name&gt;/</code> with <code>seat.json</code> and <code>SEAT.md</code>.</p>
+{% endif %}
+<section class="cards groups">
+{% for c in cards %}
+  <article class="card group{% if not c.live %} off{% endif %}">
+    <div class="head">
+      <span class="dot {{ ('st-' + c.live.status) if c.live else 'off' }}" title="{{ ('herdr workspace ' + c.live.status) if c.live else 'no herdr workspace' }}"></span>
+      <a class="name" href="/{{ c.name }}/">{{ c.name }}</a>
+      {% if c.live %}<span class="muted small">{{ c.rows|length }} tab{{ '' if c.rows|length == 1 else 's' }}{% if c.live.focused %} · focused{% endif %}</span>
+      {% else %}<span class="warn small">no workspace — <code>seat {{ c.name }}</code> starts it</span>{% endif %}
+      <span class="grow"></span>
+      {% if c.updated %}<span class="muted small" title="seat.json updated">beacon {{ c.updated }}</span>{% endif %}
+    </div>
+    {% if c.title %}<div class="title">{{ c.title }}</div>{% endif %}
+    {% if c.status %}<div class="status">{{ c.status }}</div>{% endif %}
+    {% if c.error %}<div class="err small">{{ c.error }}</div>{% endif %}
+    {% if not c.has_record %}<div class="warn small">no seat.json — unfiled directory</div>{% endif %}
+    <div class="tabs">
+    {% for r in c.rows %}
+      <div class="tabrow{% if not r.live %} off{% endif %}">
+        <span class="dot {{ ('st-' + r.status) if r.live else 'off' }}" title="{{ ('herdr ' + r.status) if r.live else 'not running' }}"></span>
+        <span class="tabname">{{ r.name }}</span>
+        <span class="who small">
+          {% if r.live %}<b class="st st-{{ r.status }}">{{ r.status }}</b>{% else %}<span class="muted">off</span>{% endif %}
+          {% if r.agent %}· <code>{{ r.agent }}</code>{% endif %}{% if r.engine %} <span class="muted">{{ r.engine }}</span>{% endif %}
+          {% if r.title %}<span class="muted ttl" title="{{ r.title }}">“{{ r.title }}”</span>{% endif %}
+        </span>
+        <span class="links small">
+          {% if r.live %}<a href="/send?seat={{ c.name }}{% if r.tab %}&tab={{ r.tab }}{% endif %}">send</a>{% else %}<span class="muted">send</span>{% endif %}
+          <a href="/inbox/{{ c.name }}/" title="inbox is per group for now">inbox</a>
+          {% if r.live %}<a href="/terminal/?arg={{ c.name }}{% if r.tab %}&tab={{ r.tab }}{% endif %}" title="attach a browser terminal to this pane">terminal</a>{% else %}<span class="muted">terminal</span>{% endif %}
+        </span>
+      </div>
+    {% endfor %}
+    </div>
+    <div class="links small foot">
+      <a href="/inbox/{{ c.name }}/">inbox{% if c.unread %} <b class="badge">{{ c.unread }}</b>{% endif %}</a>
+      {% if c.live %}<a href="/terminal/?arg={{ c.name }}" title="herdr attached to the group's agent pane">terminal</a>{% endif %}
+      <a href="/{{ c.name }}/">seat page</a>
+      {% if c.remote_control %}<span class="muted" title="Remote Control name in the Claude app">📱 {{ c.remote_control }}</span>{% endif %}
+    </div>
+    {% if c.pages %}
+    <ul class="pages small">
+      {% for p in c.pages[:4] %}<li><a href="{{ p.url }}">{{ p.title }}</a> <span class="muted">{{ p.date }}</span></li>{% endfor %}
+      {% if c.pages|length > 4 %}<li class="muted">+{{ c.pages|length - 4 }} more on the seat page</li>{% endif %}
+    </ul>
+    {% endif %}
+  </article>
+{% endfor %}
+{% for s in orphan_sessions %}
+  <article class="card group orphan">
+    <div class="head"><span class="dot red" title="herdr workspace with no seat record"></span>
+      <span class="name">{{ s.name }}</span>
+      <span class="muted small"><b class="st st-{{ s.status }}">{{ s.status }}</b> · {{ s.tabs|length }} tab{{ '' if s.tabs|length == 1 else 's' }}</span></div>
+    <div class="warn small">herdr workspace without a seat — create <code>/srv/www/{{ s.name }}/seat.json</code> or close the workspace</div>
+    <div class="tabs">
+    {% for r in s.tabs %}
+      <div class="tabrow"><span class="dot st-{{ r.status }}"></span><span class="tabname">{{ r.name }}</span>
+        <span class="who small"><b class="st st-{{ r.status }}">{{ r.status }}</b>{% if r.agent %} · <code>{{ r.agent }}</code>{% endif %}{% if r.kind %} <span class="muted">{{ r.kind }}</span>{% endif %} <span class="muted">{{ r.cwd }}</span></span>
+        <span class="links small"><a href="/send?seat={{ s.name }}&tab={{ r.name }}">send</a> <a href="/terminal/?arg={{ s.name }}&tab={{ r.name }}">terminal</a></span></div>
+    {% endfor %}
+    </div>
+  </article>
+{% endfor %}
+</section>
+
+<div class="two">
+  <section>
+    <h2>Recent</h2>
+    <ul class="recent">
+    {% for r in recent %}
+      <li><span class="muted small">{{ r.time|fmt_ts }}</span> <span class="kind {{ r.kind }}">{{ r.kind }}</span>
+        {% if r.url %}<a href="{{ r.url }}">{{ r.text }}</a>{% else %}{{ r.text }}{% endif %}
+        <span class="muted small">{{ r.who }}</span></li>
+    {% else %}<li class="muted">nothing yet</li>{% endfor %}
+    </ul>
+  </section>
+  <section>
+    <h2>Board <a class="small" href="/board">open →</a></h2>
+    <ul class="recent">
+    {% for it in open_items %}
+      <li><a href="/board#item-{{ it.idx }}">{{ it.title }}</a>
+        {% for t in it.tags %}<span class="tag">#{{ t }}</span>{% endfor %}
+        {% if it.notes %}<span class="muted small">· {{ it.notes|length }} note{{ '' if it.notes|length == 1 else 's' }}, last: {{ it.notes[-1][:70] }}</span>{% endif %}</li>
+    {% else %}<li class="muted">no open items</li>{% endfor %}
+    </ul>
+  </section>
+</div>
+
+<details class="dirmap" open>
+  <summary><b>Where things live</b> <span class="muted small">— from herdr's real pane cwds; <code>seat X</code> in a shell attaches or starts a group</span></summary>
+  <pre class="tree">{% for r in dirmap %}{{ '    ' * r.depth }}{% if r.href %}<a href="{{ r.href }}">{{ r.path }}</a>{% else %}{{ r.path }}{% endif %}{% if r.note %}<span class="muted">{{ ' ' * (34 - 4 * r.depth - r.path|length if (34 - 4 * r.depth - r.path|length) > 1 else 1) }}{{ r.note }}</span>{% endif %}
+{% endfor %}</pre>
+</details>
+
+{% set filed = pages|selectattr('filed')|list %}
+<details class="allpages">
+  <summary><b>All pages</b> <span class="muted small">({{ filed|length }})</span>{% if unfiled %} <span class="warn small">· {{ unfiled|length }} unfiled</span>{% endif %}</summary>
+  <table class="list">
+    <thead><tr><th>date</th><th>group</th><th>page</th><th>description</th></tr></thead>
+    <tbody>
+    {% for p in filed %}
+      <tr><td class="muted">{{ p.date }}</td><td><a href="/{{ p.seat }}/">{{ p.seat }}</a></td>
+        <td><a href="{{ p.url }}">{{ p.title }}</a></td>
+        <td class="muted">{{ p.description }}{% for t in p.tags %} <span class="tag">#{{ t }}</span>{% endfor %}</td></tr>
+    {% else %}
+      <tr><td colspan="4" class="muted">no filed pages yet — add <code>page.json</code> next to an <code>index.html</code></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if unfiled %}
+  <h3 class="warn">Unfiled pages <span class="small">(HTML without a page.json — still reachable, please file them)</span></h3>
+  <ul class="small">
+    {% for p in unfiled %}<li><a href="{{ p.url }}">{{ p.path }}</a> {% if p.error %}<span class="err">{{ p.error }}</span>{% endif %}</li>{% endfor %}
+  </ul>
+  {% endif %}
+</details>
+{% endblock %}
